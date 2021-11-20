@@ -162,7 +162,7 @@ if [[ $CONFIG =~ ^[1]$ ]] ; then
 	FLUSH TABLES WITH READ LOCK;
 	exit
   
-  git --force enable
+  sudo ufw --force enable
   sudo ufw allow mysql
   sudo systemctl start mysql
   sudo systemctl enable mysql
