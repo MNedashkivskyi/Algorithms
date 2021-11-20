@@ -122,18 +122,18 @@ echo "============================================"
 echo "Setting up database ========================"
 echo ""
 
-FRONTEND_EXTERNAL_IP=$(gcloud compute instances describe $FRONTEND --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-NGINX_EXTERNAL_IP=$(gcloud compute instances describe $NGINX --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+FRONTEND_INTERNAL_IP=$(gcloud compute instances describe $FRONTEND --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+NGINX_INTERNAL_IP=$(gcloud compute instances describe $NGINX --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 
 if [[ $CONFIG =~ ^[1]$ ]] ; then
-	BACKEND_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-	DB_EXTERNAL_IP=$(gcloud compute instances describe $DATABASE --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	BACKEND_INTERNAL_IP=$(gcloud compute instances describe $BACKEND --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	DB_INTERNAL_IP=$(gcloud compute instances describe $DATABASE --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 elif [[ $CONFIG =~ ^[45]$ ]] ; then
-	BACKEND1_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND1 --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-	BACKEND2_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND2 --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-	MASTER_EXTERNAL_IP=$(gcloud compute instances describe $MASTER --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	BACKEND1_INTERNAL_IP=$(gcloud compute instances describe $BACKEND1 --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	BACKEND2_INTERNAL_IP=$(gcloud compute instances describe $BACKEND2 --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	MASTER_INTERNAL_IP=$(gcloud compute instances describe $MASTER --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 	MASTER_INTERNAL_IP=$(gcloud compute instances describe $MASTER --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
-	SLAVE_EXTERNAL_IP=$(gcloud compute instances describe $SLAVE --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	SLAVE_INTERNAL_IP=$(gcloud compute instances describe $SLAVE --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 	SLAVE_INTERNAL_IP=$(gcloud compute instances describe $SLAVE --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
 fi
 
@@ -162,6 +162,7 @@ if [[ $CONFIG =~ ^[1]$ ]] ; then
 	FLUSH TABLES WITH READ LOCK;
 	exit
   
+  git --force enable
   sudo ufw allow mysql
   sudo systemctl start mysql
   sudo systemctl enable mysql
@@ -285,7 +286,7 @@ if [[ $CONFIG =~ ^[1]$ ]] ; then
 	sudo sed -i "s/server.port=..../server.port=$BACKEND_PORT/" src/main/resources/application.properties
 
 	sudo sed -i 's/=hsqldb/=mysql/' src/main/resources/application.properties
-	sudo sed -i "s/^spring.datasource.url.*$/spring.datasource.url=jdbc:mysql:\/\/$DB_EXTERNAL_IP:3306\/petclinic?useUnicode=true/" src/main/resources/application-mysql.properties
+	sudo sed -i "s/^spring.datasource.url.*$/spring.datasource.url=jdbc:mysql:\/\/$DB_INTERNAL_IP:3306\/petclinic?useUnicode=true/" src/main/resources/application-mysql.properties
 
 	pkill -f java
 	rm log.out 2> /dev/null
@@ -310,7 +311,7 @@ elif [[ $CONFIG =~ ^[45]$ ]] ; then
 	sudo sed -i "s/server.port=..../server.port=$BACKEND1_PORT/" src/main/resources/application.properties
 
 	sudo sed -i 's/=hsqldb/=mysql/' src/main/resources/application.properties
-	sudo sed -i "s/^spring.datasource.url.*$/spring.datasource.url=jdbc:mysql:\/\/$MASTER_EXTERNAL_IP:3306\/petclinic?useUnicode=true\//" src/main/resources/application-mysql.properties
+	sudo sed -i "s/^spring.datasource.url.*$/spring.datasource.url=jdbc:mysql:\/\/$MASTER_INTERNAL_IP:3306\/petclinic?useUnicode=true\//" src/main/resources/application-mysql.properties
 
 	pkill -f java
 	rm log.out 2> /dev/null
@@ -336,7 +337,7 @@ elif [[ $CONFIG =~ ^[45]$ ]] ; then
 	sudo sed -i "s/server.port=..../server.port=$BACKEND2_PORT/" src/main/resources/application.properties
 
 	sudo sed -i 's/=hsqldb/=mysql/' src/main/resources/application.properties
-	sudo sed -i "s/^spring.datasource.url.*$/spring.datasource.url=jdbc:mysql:\/\/$SLAVE_EXTERNAL_IP:3306\/petclinic?useUnicode=true\//" src/main/resources/application-mysql.properties
+	sudo sed -i "s/^spring.datasource.url.*$/spring.datasource.url=jdbc:mysql:\/\/$SLAVE_INTERNAL_IP:3306\/petclinic?useUnicode=true\//" src/main/resources/application-mysql.properties
 
 	pkill -f java
 	rm log.out 2> /dev/null
@@ -372,9 +373,9 @@ if [[ "$NGINX" != "$FRONTEND" ]] ; then
 	gcloud compute scp "$NGINX":/etc/nginx/nginx.conf nginx.conf --zone $ZONE -q
 
 	if [[ "$CONFIG" == "4" ]] ; then
-		sudo sed -i "/http {/a #konfiguracja4\n\tupstream backend1 {\n\t\tserver $BACKEND1_EXTERNAL_IP:$BACKEND1_PORT;\n\t}\n\tupstream backend2 {\n\t\tserver $BACKEND2_EXTERNAL_IP:$BACKEND2_PORT;\n\t}\n\n\tserver {\n\t\tlisten 80;\n\t\tlocation /petclinic/api/ {\n\t\t\tif (\$request_method = GET) {\n\t\t\t\tproxy_pass http://backend1/;\n\t\t\t}\n\t\t\tif (\$request_method = POST) {\n\t\t\t\tproxy_pass http://backend2/;\n\t\t\t}\n\t\t\tif (\$request_method = PUT) {\n\t\t\t\tproxy_pass http://backend2/;\n\t\t\t}\n\t\t\tif (\$request_method = DELETE) {\n\t\t\t\tproxy_pass http://backend2/;\n\t\t\t}\n\t\t}\n\t}" nginx.conf
+		sudo sed -i "/http {/a #konfiguracja4\n\tupstream backend1 {\n\t\tserver $BACKEND1_INTERNAL_IP:$BACKEND1_PORT;\n\t}\n\tupstream backend2 {\n\t\tserver $BACKEND2_INTERNAL_IP:$BACKEND2_PORT;\n\t}\n\n\tserver {\n\t\tlisten 80;\n\t\tlocation /petclinic/api/ {\n\t\t\tif (\$request_method = GET) {\n\t\t\t\tproxy_pass http://backend1/;\n\t\t\t}\n\t\t\tif (\$request_method = POST) {\n\t\t\t\tproxy_pass http://backend2/;\n\t\t\t}\n\t\t\tif (\$request_method = PUT) {\n\t\t\t\tproxy_pass http://backend2/;\n\t\t\t}\n\t\t\tif (\$request_method = DELETE) {\n\t\t\t\tproxy_pass http://backend2/;\n\t\t\t}\n\t\t}\n\t}" nginx.conf
 	elif [[ "$CONFIG" == "5" ]] ; then
-		sudo sed -i "/http {/a #konfiguracja5\n\tupstream backend {\n\t\tserver $BACKEND1_EXTERNAL_IP:$BACKEND1_PORT;\n\t\tserver $BACKEND2_EXTERNAL_IP:$BACKEND2_PORT;\n\t}\n\tserver {\n\t\tlisten 80;\n\t\tlocation /petclinic/api/ {\n\t\t\tproxy_pass http://backend/;\n\t\t}\n\t}" nginx.conf
+		sudo sed -i "/http {/a #konfiguracja5\n\tupstream backend {\n\t\tserver $BACKEND1_INTERNAL_IP:$BACKEND1_PORT;\n\t\tserver $BACKEND2_INTERNAL_IP:$BACKEND2_PORT;\n\t}\n\tserver {\n\t\tlisten 80;\n\t\tlocation /petclinic/api/ {\n\t\t\tproxy_pass http://backend/;\n\t\t}\n\t}" nginx.conf
 	fi
 
 	gcloud compute scp nginx.conf "$NGINX":~/nginx.conf --zone $ZONE -q
@@ -423,11 +424,11 @@ N | npm i --save-dev @angular/cli@11.0.7
 npm i
 
 if [[ "$CONFIG" == "1" ]] ; then
-	sudo sed -i "s/^.*REST_API_URL: .*$/  REST_API_URL: 'http:\/\/$BACKEND_EXTERNAL_IP:$BACKEND_PORT\/petclinic\/api\/'/" src/environments/environment.ts
+	sudo sed -i "s/^.*REST_API_URL: .*$/  REST_API_URL: 'http:\/\/$BACKEND_INTERNAL_IP:$BACKEND_PORT\/petclinic\/api\/'/" src/environments/environment.ts
 fi
 
 if [[ "$CONFIG" == "4" || "$CONFIG" == "5" ]] ; then
-	sudo sed -i "s/^.*REST_API_URL: .*$/  REST_API_URL: 'http:\/\/$NGINX_EXTERNAL_IP:80\/petclinic\/api\/'/" src/environments/environment.ts
+	sudo sed -i "s/^.*REST_API_URL: .*$/  REST_API_URL: 'http:\/\/$NGINX_INTERNAL_IP:80\/petclinic\/api\/'/" src/environments/environment.ts
 fi
 
 ng build --base-href=/petclinic/ --deploy-url=/petclinic/
@@ -442,9 +443,9 @@ gcloud compute scp "$NGINX":/etc/nginx/nginx.conf nginx.conf --zone $ZONE -q
 if [[ "$CONFIG" == "1"  || ( $CONFIG =~ ^[45]$ && "$FRONTEND" != "$NGINX" ) ]] ; then
 	sudo sed -i 's/http {/http {\n\tserver {\n\t\tlisten 80 default_server;\n\t\troot \/usr\/share\/nginx\/html;\n\t\tindex index.html;\n\t\tlocation \/petclinic\/ {\n\t\t\talias \/usr\/share\/nginx\/html\/petclinic\/dist\/;\n\t\t\ttry_files \$uri\$args \$uri\$args\/ \/petclinic\/index.html;\n\t\t}\n\t}/' nginx.conf
 elif [[ "$CONFIG" == "4" && "$FRONTEND" == "$NGINX" ]] ; then
-	sudo sed -i "s/http {/http {\n\tupstream backend1 {\n\t\tserver $BACKEND1_EXTERNAL_IP:$BACKEND1_PORT;\n\t}\n\tupstream backend2 {\n\t\tserver $BACKEND2_EXTERNAL_IP:$BACKEND2_PORT;\n\t}\n\n\tserver {\n\t\t listen 80;\n\t\t location \/petclinic\/ {\n\t\t\t alias \/usr\/share\/nginx\/html\/petclinic\/dist\/;\n\t\t\t try_files \$uri\$args \$uri\$args\/ \/petclinic\/index.html;\n\t\t}\n\t\tlocation \/petclinic\/api\/ {\n\t\t\tif (\$request_method = GET) {\n\t\t\t\tproxy_pass http:\/\/backend1\/;\n\t\t\t}\n\t\t\tif (\$request_method = POST) {\n\t\t\t\tproxy_pass http:\/\/backend2\/;\n\t\t\t}\n\t\t\tif (\$request_method = PUT) {\n\t\t\t\tproxy_pass http:\/\/backend2\/;\n\t\t\t}\n\t\t\tif (\$request_method = DELETE) {\n\t\t\t\tproxy_pass http:\/\/backend2\/;\n\t\t\t}\n\t\t}\n\t}/" nginx.conf
+	sudo sed -i "s/http {/http {\n\tupstream backend1 {\n\t\tserver $BACKEND1_INTERNAL_IP:$BACKEND1_PORT;\n\t}\n\tupstream backend2 {\n\t\tserver $BACKEND2_INTERNAL_IP:$BACKEND2_PORT;\n\t}\n\n\tserver {\n\t\t listen 80;\n\t\t location \/petclinic\/ {\n\t\t\t alias \/usr\/share\/nginx\/html\/petclinic\/dist\/;\n\t\t\t try_files \$uri\$args \$uri\$args\/ \/petclinic\/index.html;\n\t\t}\n\t\tlocation \/petclinic\/api\/ {\n\t\t\tif (\$request_method = GET) {\n\t\t\t\tproxy_pass http:\/\/backend1\/;\n\t\t\t}\n\t\t\tif (\$request_method = POST) {\n\t\t\t\tproxy_pass http:\/\/backend2\/;\n\t\t\t}\n\t\t\tif (\$request_method = PUT) {\n\t\t\t\tproxy_pass http:\/\/backend2\/;\n\t\t\t}\n\t\t\tif (\$request_method = DELETE) {\n\t\t\t\tproxy_pass http:\/\/backend2\/;\n\t\t\t}\n\t\t}\n\t}/" nginx.conf
 elif [[ "$CONFIG" == "5" && "$FRONTEND" == "$NGINX" ]] ; then
-	sudo sed -i "s/http {/http {\n\tupstream backend {\n\t\tserver $BACKEND1_EXTERNAL_IP:$BACKEND1_PORT;\n\t\tserver $BACKEND2_EXTERNAL_IP:$BACKEND2_PORT;\n\t}\n\n\tserver {\n\t\tlisten 80;\n\t\tlocation \/petclinic\/ {\n\t\t\talias \/usr\/share\/nginx\/html\/petclinic\/dist\/;\n\t\t\ttry_files \$uri\$args \$uri\$args\/ \/petclinic\/index.html;\n\t\t}\n\t\tlocation \/petclinic\/api\/ {\n\t\t\tproxy_pass http:\/\/backend\/;\n\t\t}\n\t}/" nginx.conf
+	sudo sed -i "s/http {/http {\n\tupstream backend {\n\t\tserver $BACKEND1_INTERNAL_IP:$BACKEND1_PORT;\n\t\tserver $BACKEND2_INTERNAL_IP:$BACKEND2_PORT;\n\t}\n\n\tserver {\n\t\tlisten 80;\n\t\tlocation \/petclinic\/ {\n\t\t\talias \/usr\/share\/nginx\/html\/petclinic\/dist\/;\n\t\t\ttry_files \$uri\$args \$uri\$args\/ \/petclinic\/index.html;\n\t\t}\n\t\tlocation \/petclinic\/api\/ {\n\t\t\tproxy_pass http:\/\/backend\/;\n\t\t}\n\t}/" nginx.conf
 fi
 
 gcloud compute scp nginx.conf "$NGINX":~/nginx.conf --zone $ZONE -q
