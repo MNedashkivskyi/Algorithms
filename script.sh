@@ -122,18 +122,18 @@ echo "============================================"
 echo "Setting up database ========================"
 echo ""
 
-FRONTEND_EXTERNAL_IP=$(gcloud compute instances describe $FRONTEND --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-NGINX_EXTERNAL_IP=$(gcloud compute instances describe $NGINX --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+FRONTEND_EXTERNAL_IP=$(gcloud compute instances describe $FRONTEND --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
+NGINX_EXTERNAL_IP=$(gcloud compute instances describe $NGINX --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
 
 if [[ $CONFIG =~ ^[1]$ ]] ; then
-	BACKEND_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-	DB_EXTERNAL_IP=$(gcloud compute instances describe $DATABASE --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	BACKEND_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
+	DB_EXTERNAL_IP=$(gcloud compute instances describe $DATABASE --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
 elif [[ $CONFIG =~ ^[45]$ ]] ; then
-	BACKEND1_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND1 --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-	BACKEND2_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND2 --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
-	MASTER_EXTERNAL_IP=$(gcloud compute instances describe $MASTER --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	BACKEND1_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND1 --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
+	BACKEND2_EXTERNAL_IP=$(gcloud compute instances describe $BACKEND2 --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
+	MASTER_EXTERNAL_IP=$(gcloud compute instances describe $MASTER --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
 	MASTER_INTERNAL_IP=$(gcloud compute instances describe $MASTER --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
-	SLAVE_EXTERNAL_IP=$(gcloud compute instances describe $SLAVE --zone $ZONE --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+	SLAVE_EXTERNAL_IP=$(gcloud compute instances describe $SLAVE --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
 	SLAVE_INTERNAL_IP=$(gcloud compute instances describe $SLAVE --zone $ZONE --format='get(networkInterfaces[0].networkIP)')
 fi
 
