@@ -1,0 +1,20 @@
+- name: Setup NGINX Server
+  hosts: localhost
+  become: yes
+  
+  tasks:
+  
+  - name: "apt-get update"
+    apt: 
+      update_cache: yes
+      
+  - name: Install NGINX packages
+    apt: 
+      name: nginx
+      state: latest
+      
+  - name: Start service
+    service: 
+      name: nginx
+      state: restarted
+      enabled: yes
