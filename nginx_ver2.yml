@@ -18,7 +18,8 @@
       rule: allow
       name: OpenSSH
   
-  - community.general.ufw:
+  - name: Allow Nginx HTTP
+    community.general.ufw:
       rule: allow
       name: Nginx HTTP
       
