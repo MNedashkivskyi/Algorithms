@@ -8,6 +8,11 @@
     apt: 
       update_cache: yes
       
+  - name: Install NGINX packages
+    apt: 
+      name: nginx
+      state: latest
+      
   - name: Allow everything and enable UFW
     community.general.ufw:
       state: enabled
@@ -22,11 +27,6 @@
     community.general.ufw:
       rule: allow
       name: Nginx HTTP
-      
-  - name: Install NGINX packages
-    apt: 
-      name: nginx
-      state: latest
       
   - name: Start service
     service: 
