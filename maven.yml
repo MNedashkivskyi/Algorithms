@@ -1,11 +1,16 @@
-- name: Setup NGINX Server
+---
+
+- name: Installing Maven
   hosts: localhost
   become: yes
-  
+
   tasks:
 
-  - name: Download Apache Maven 
-  get_url: url=http://apache.claz.org/maven/maven-3/3.1.1/binaries/apache-maven--bin.tar.gz dest=/tmp/apache-maven-3.1.1-bin.tar.gz
+  - name: Install Maven using Ansible
+    apt:
+      name: "{{ packages }}"
+      state: present
+    vars:
+      packages:
+        - maven
 
-  - name: Untar Maven 
-  shell: chdir=/tmp creates=/opt/apache-maven-3.1.1 tar -zxf apache-maven-3.1.1-bin.tar.gz -C /opt
