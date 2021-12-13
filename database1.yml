@@ -1,0 +1,74 @@
+
+- name: Build db
+  hosts: localhost
+  gather_facts: yes
+  become: yes
+  vars:
+    mysql_root_password: password
+  tasks:
+    - name: Get update
+      ansible.builtin.shell:
+        cmd: apt-get update
+    - name: install mysql-server
+      apt: name={{ item }} update_cache=yes cache_valid_time=3600 state=present
+      with_items:
+      - mysql-server
+    - name: install pip
+      apt:
+        name: python3-pip
+        update_cache: yes
+        state: present
+    - name: install python
+      pip:
+        name:
+          - PyMySQL
+        state: present
+        executable: pip3
+    - name: start up the mysql service
+      shell: service mysql start
+    - name: ensure mysql is enabled to run on startup
+      ansible.builtin.service:
+        name: mysql
+        state: started
+        enabled: yes
+    - name: update mysql root password for root account
+      mysql_user:
+        name: root
+         host: localhost
+        password: "{{ mysql_root_password }}"
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        check_implicit_admin: yes
+        priv: "*.*:ALL,GRANT"
+    - name: create petclinic user
+      mysql_user:
+        name: pc
+        password: petclinic
+        host: localhost
+        priv: "*.*:ALL,GRANT"
+        state: present
+    - name: Clone a repo spring-petclinic-microservices
+      ansible.builtin.git:
+        repo: https://github.com/spring-petclinic/spring-petclinic-rest
+        dest: /home/wus/spring-petclinic
+      become: no
+    - name: Fix petclinic sql scripts
+      ansible.builtin.shell:
+        cmd: sed -i "s/GRANT ALL PRIVILEGES ON petclinic.* TO pc@localhost IDENTIFIED BY 'pc';//g" ./initDB.sql
+        chdir: /home/wus/spring-petclinic/spring-petclinic-rest/src/main/resources/db/mysql
+    - name: Fix petclinic sql scripts
+      ansible.builtin.shell:
+        cmd: sudo sed -i "s/^bind-address\s*=\s*127\.0\.0\.1$/bind-address=0.0.0.0/g" /etc/mysql/mysql.conf.d/mysqld.cnf
+    - name: Create tables
+      mysql_db:
+        name=petclinic
+        state=import
+        target=/home/wus/spring-petclinic/spring-petclinic-rest/src/main/resources/db/mysql/initDB.sql
+    - name: Import data
+      mysql_db:
+        name=petclinic
+        state=import
+        target=/home/wus/spring-petclinic/spring-petclinic-rest/src/main/resources/db/mysql/populateDB.sql
+
+
+
