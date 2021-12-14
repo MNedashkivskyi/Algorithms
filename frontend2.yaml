@@ -1,0 +1,79 @@
+---
+- name: Build Frontend
+  hosts: frontend
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Get update
+      ansible.builtin.shell:
+        cmd: apt-get update
+    
+    - name: Install nginx
+      apt:
+        name: nginx
+
+    - name: Install npm
+      apt:
+        name: npm
+        update_cache: yes
+
+    - name: Install angular
+      npm:
+        name: '@angular/cli@11.0.7'
+        global: yes
+        state: present
+    
+    - name: Install n
+      npm:
+        name: n
+        global: yes
+
+    - name: Update node
+      ansible.builtin.shell:
+        cmd: n 12
+    
+    - name: Update node 2
+      ansible.builtin.shell:
+        cmd: PATH="$PATH"
+
+    - name: Clone repository
+      git:
+        repo: https://github.com/spring-petclinic/spring-petclinic-angular.git
+        dest: /home/ubuntu/spring-petclinic-angular
+
+    - name: Install angular in project
+      ansible.builtin.shell:
+        cmd: npm i --save-dev @angular/cli@11.0.7
+        chdir: /home/ubuntu/spring-petclinic-angular
+    
+    - name: Install dependencies
+      ansible.builtin.shell:
+        cmd: npm i
+        chdir: /home/ubuntu/spring-petclinic-angular
+
+    - name: Build frontend
+      ansible.builtin.shell:
+        cmd: ng build --base-href=/petclinic/ --deploy-url=/petclinic/
+        chdir: /home/ubuntu/spring-petclinic-angular
+
+    - name: Create directory
+      file:
+        path: /usr/share/nginx/html/petclinic
+        state: directory
+    
+    - name: Copy build
+      ansible.builtin.shell:
+        cmd: cp -R dist/ /usr/share/nginx/html/petclinic/dist
+        chdir: /home/ubuntu/spring-petclinic-angular
+    
+    - name: Sed 1
+      ansible.builtin.shell:
+        cmd: sed -i 's/http {/http {\n\tserver {\n\t\tlisten 80 default_server;\n\t\troot \/usr\/share\/nginx\/html;\n\t\tindex index.html;\n\t\tlocation \/petclinic\/ {\n\t\t\talias \/usr\/share\/nginx\/html\/petclinic\/dist\/;\n\t\t\ttry_files \$uri\$args \$uri\$args\/ \/petclinic\/index.html;\n\t\t}\n\t}/' /etc/nginx/nginx.conf
+    
+    - name: Sed 2
+      ansible.builtin.shell:
+        cmd: sed -e 's/^#*/#/' -i /etc/nginx/sites-enabled/default
+    
+    - name: Nginx reload
+      ansible.builtin.shell:
+        cmd: nginx -s reload

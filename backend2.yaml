@@ -1,0 +1,24 @@
+---
+- name: Build Backend
+  hosts: backend
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Get update
+      ansible.builtin.shell:
+        cmd: apt-get update
+
+    - name: Install jdk
+      apt:
+        name: openjdk-11-jdk
+        update_cache: yes
+
+    - name: Clone repository
+      git:
+        repo: https://github.com/spring-petclinic/spring-petclinic-rest.git
+        dest: /home/ubuntu/spring-petclinic-rest
+    
+    - name: Run and build backend
+      ansible.builtin.shell:
+       cmd: ./mvnw spring-boot:run
+       chdir: /home/ubuntu/spring-petclinic-rest
