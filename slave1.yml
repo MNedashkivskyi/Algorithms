@@ -1,0 +1,81 @@
+- name: slave
+  hosts: "{{slave_name}}"
+  vars:
+        DB_MASTER_IP: "{{ hostvars[db_master_name]['networkInterfaces'][0]['networkIP'] }}"
+        DB_SLAVE_IP: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+  become: yes
+  tasks:
+    - name: test
+      debug: msg="test '{{DB_MASTER_IP}}'"
+    - name: test
+      debug: msg="test '{{DB_SLAVE_IP}}'"
+
+    - name: Get update
+      ansible.builtin.shell:
+        cmd: sudo apt-get update
+    - name: Install MYSQL Server
+      apt: name="{{ item }}" update_cache=yes cache_valid_time=3600 state=present
+      with_items:
+        - mysql-server
+
+    # - name: copy database file
+    #   ansible.builtin.copy:
+    #     src: ~/petclinic/petclinic.sql
+    #     dest: petclinic.sql
+
+    - name: copy database file
+      run_once: yes
+      fetch:
+        src: ~/petclinic/petclinic.sql
+        dest: petclinic.sql
+        flat: yes
+
+    - name: init database
+      command: >
+        mysql 
+        --execute="CREATE DATABASE petclinic;
+                   CREATE USER 'pc'@'%' IDENTIFIED BY 'petclinic';
+                   GRANT ALL PRIVILEGES ON petclinic.* TO 'pc'@'%';"
+       
+    - name: load sql file
+      shell: mysql petclinic < petclinic.sql
+
+    - name: edit bind-address
+      shell: sed -i "s|bind-address.*|bind-address = localhost|" /etc/mysql/mysql.conf.d/mysqld.cnf
+
+    - name: edit server-id
+      shell: sed -i 's/^#\s*server-id\s*=\s*1$/server-id=2/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+
+    - name: edit bin log ignore
+      shell: sed -i 's/^#\s*binlog_ignore_db\s*=\s*include_database_name$/relay-log=\/var\/log\/mysql\/mysql-relay-bin\.log/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+
+    - name: edit log_bin
+      shell: sed -i 's/^#\s*log_bin\s*=\s*\/var\/log\/mysql\/mysql-bin\.log$/log_bin=\/var\/log\/mysql\/mysql-bin.log/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+
+    - name: edit binlog_do_db
+      shell: sed -i 's/^#\s*binlog_do_db\s*=\s*include_database_name$/binlog_do_db=petclinic/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+
+    - name: Restart the MySQL service
+      service:
+        name: mysql
+        enabled: yes
+        state: restarted
+
+    - name: init database
+      command: >
+        mysql
+        --execute="SET @@GLOBAL.ENFORCE_GTID_CONSISTENCY = WARN;
+                   SET @@GLOBAL.ENFORCE_GTID_CONSISTENCY = ON;
+                   SET @@GLOBAL.GTID_MODE = OFF_PERMISSIVE;
+                   SET @@GLOBAL.GTID_MODE = ON_PERMISSIVE;
+                   SET @@GLOBAL.GTID_MODE = ON;
+
+                   CHANGE REPLICATION SOURCE TO
+                   SOURCE_HOST='localhost',
+                   SOURCE_USER='slave',
+                   SOURCE_PASSWORD='slave_password',
+                   SOURCE_LOG_FILE='mysql-bin.000001';
+
+                   CHANGE MASTER TO MASTER_AUTO_POSITION = 1;
+
+                   START REPLICA;"
