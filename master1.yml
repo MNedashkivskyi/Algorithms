@@ -1,0 +1,92 @@
+- name: Master
+  hosts: "{{ master_name }}"
+  vars:
+    master_ip: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+    slave_ip: "{{ hostvars[db_slave_name]['networkInterfaces'][0]['networkIP'] }}"
+    mysql_root_password: password
+    slave_password: slave_password
+  become: yes
+  tasks:
+    - name: Get update
+      ansible.builtin.shell:
+        cmd: sudo apt-get update
+    - name: Install pip
+      apt:
+        name: python3-pip
+        update_cache: yes
+        state: present
+    - name: Install python
+      pip:
+        name:
+          - PyMySQL
+        state: present
+        executable: pip3
+    - name: Install MYSQL Server
+      apt: name="{{ item }}" update_cache=yes cache_valid_time=3600 state=present
+      with_items:
+        - mysql-server
+    - name: Bind address changing (mysqld.cnf)
+      ansible.builtin.shell:
+        cmd: sed -i "s|bind-address.*|bind-address = {{ master_ip }}|" /etc/mysql/mysql.conf.d/mysqld.cnf
+    - name: Log_bin (mysqld.cnf)
+      ansible.builtin.shell:
+        cmd: sed -i 's/^#\s*log_bin\s*=\s*\/var\/log\/mysql\/mysql-bin\.log$/log_bin=\/var\/log\/mysql\/mysql-bin.log/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+    - name: Binlog_do_db (mysqld.cnf)
+      ansible.builtin.shell:
+        cmd: sed -i 's/^#\s*binlog_do_db\s*=\s*include_database_name$/binlog_do_db=petclinic/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+    - name: Server ID changing (mysqld.cnf)
+      ansible.builtin.shell:
+        cmd: sed -i 's/^#\s*server-id\s*=\s*1$/server-id=1/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+    - name: Restart the MySQL service
+      service:
+        name: mysql
+        enabled: yes
+        state: restarted
+    - name: create petclinic user
+      mysql_user:
+        name: pc
+        password: petclinic
+        host: "{{item}}"
+        priv: "*.*:ALL,GRANT"
+        state: present
+      with_items:
+        - "%"
+        - "slave_ip"
+    - name: Create slave user
+      mysql_user:
+        name: slave
+        password: slave_password
+        host: "{{ slave_ip }}"
+        priv: "*.*:REPLICATION SLAVE"
+        state: present
+    - name: Reload privilege tables
+      command: 'mysql -ne "{{item}}"'
+      with_items:
+        - FLUSH PRIVILEGES
+    - name: Clone a repo spring-petclinic-microservices
+      ansible.builtin.git:
+        repo: https://github.com/spring-petclinic/spring-petclinic-rest.git
+        dest: ./wus/spring-petclinic-rest
+        clone: yes
+        update: yes
+    - name: Dump db
+      ansible.builtin.shell: mysqldump -u root petclinic > ./wus/petclinic.sql
+    - name: Final database setup
+      command: mysql
+        --execute="USE petclinic;
+        UNLOCK TABLES;
+        SET @@GLOBAL.ENFORCE_GTID_CONSISTENCY = WARN;
+        SET @@GLOBAL.ENFORCE_GTID_CONSISTENCY = ON;
+        SET @@GLOBAL.GTID_MODE = OFF_PERMISSIVE;
+        SET @@GLOBAL.GTID_MODE = ON_PERMISSIVE;
+        SET @@GLOBAL.GTID_MODE = ON;"
+
+    - name: copy database file
+      run_once: yes
+      fetch:
+        src: ./wus/petclinic.sql
+        dest: "~/petclinic/"
+        flat: yes
+
+    - name: Get master data
+      ansible.builtin.shell: sudo mysql -ANe "SHOW MASTER STATUS" > ./wus/master_data.txt
